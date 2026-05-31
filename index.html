@@ -191,377 +191,391 @@
 </div>
 
 <script>
+let staffUsers = [];
+let orders = [];
+let currentUser = null;
+let editId = null;
+let editUserId = null;
+const START_ORDER_NO = 80230001;
+
+// ========= 请替换成你自己的 Bmob 密钥 =========
+const APP_ID = "01650c56bc7714f7195d578d829bb531";
+const REST_KEY = "4e12c9fb173ebe3ae62b70522e478c65";
+// ============================================
+
+const TABLE_USER = "StaffUser";
+const TABLE_ORDER = "OrderData";
+
 function initApp(){
     if(typeof Bmob === "undefined"){
         setTimeout(initApp, 300);
         return;
     }
-    let staffUsers = [];
-    let orders = [];
-    let currentUser = null;
-    let editId = null;
-    let editUserId = null;
-    const START_ORDER_NO = 80230001;
-
-    // ========== 在这里替换成你自己的密钥 ==========
-    const APP_ID = "01650c56bc7714f7195d578d829bb531";
-    const REST_KEY = "4e12c9fb173ebe3ae62b70522e478c65";
     Bmob.initialize(APP_ID, REST_KEY);
     Bmob.config({ useSecurity: false });
+    loadAllData();
+}
 
-    const TABLE_USER = "StaffUser";
-    const TABLE_ORDER = "OrderData";
-
-    window.onload = async function(){
-        await loadAllData();
-        let save = localStorage.getItem('rememberLogin');
-        if(save){
-            let data = JSON.parse(save);
-            document.getElementById('loginAccount').value = data.account || '';
-            document.getElementById('loginPwd').value = data.pwd || '';
-            document.getElementById('rememberPwd').checked = true;
-        }
-        document.getElementById('addOrderBtn').onclick = ()=>openEditModal(null);
-    };
-
-    async function loadAllData() {
-        try {
-            const userQuery = Bmob.Query(TABLE_USER);
-            staffUsers = await userQuery.find();
-            const orderQuery = Bmob.Query(TABLE_ORDER);
-            orderQuery.order("createdAt");
-            orders = await orderQuery.find();
-            renderTable();
-        } catch (e) {
-            alert('加载失败：' + e.message);
-        }
-    }
-
-    function switchTab(i) {
-        document.querySelectorAll('.tab-item').forEach((t,k) => t.className = k===i ? 'tab-item active' : 'tab-item');
-        document.getElementById('staffLogin').classList.toggle('hidden', i!==0);
-        document.getElementById('customerLogin').classList.toggle('hidden', i!==1);
-    }
-
-    async function staffLogin() {
-        let a = document.getElementById('loginAccount').value.trim();
-        let p = document.getElementById('loginPwd').value.trim();
-        let rem = document.getElementById('rememberPwd').checked;
-        let user = staffUsers.find(u => u.account === a && u.pwd === p);
-        if (!user) return alert('账号或密码错误');
-        if(rem) localStorage.setItem('rememberLogin', JSON.stringify({account:a,pwd:p}));
-        else localStorage.removeItem('rememberLogin');
-        currentUser = user;
-        loginOk();
-    }
-
-    function customerLogin() {
-        let p = document.getElementById('custPhone').value.trim();
-        if (!p) return alert('请输入手机号');
-        currentUser = { role:'customer', roleName:'客户', phone:p, isCustomer: true };
-        loginOk();
-    }
-
-    function loginOk() {
-        document.getElementById('loginWrap').classList.add('hidden');
-        document.getElementById('mainWrap').classList.remove('hidden');
-        document.getElementById('userRole').innerText = currentUser.isCustomer ? '客户' : currentUser.roleName;
-        document.getElementById('userName').innerText = currentUser.isCustomer ? '客户' : currentUser.account;
-        let isAdmin = !currentUser.isCustomer && currentUser.role === 'admin';
-        let isCust = currentUser.isCustomer;
-        document.getElementById('userManageBtn').classList.toggle('hidden', !isAdmin);
-        document.getElementById('addOrderBtn').classList.toggle('hidden', isCust);
-        document.getElementById('exportBtn').classList.toggle('hidden', isCust);
+async function loadAllData() {
+    try {
+        const userQuery = Bmob.Query(TABLE_USER);
+        staffUsers = await userQuery.find();
+        const orderQuery = Bmob.Query(TABLE_ORDER);
+        orderQuery.order("createdAt");
+        orders = await orderQuery.find();
         renderTable();
-    }
-
-    function logout() {
-        currentUser = null;
-        document.getElementById('mainWrap').classList.add('hidden');
-        document.getElementById('loginWrap').classList.remove('hidden');
-        document.getElementById('orderPage').classList.remove('hidden');
-        document.getElementById('userManagePage').classList.add('hidden');
-    }
-
-    function openUserManage() {
-        document.getElementById('orderPage').classList.add('hidden');
-        document.getElementById('userManagePage').classList.remove('hidden');
-        renderUserTable();
-    }
-
-    function backToOrder() {
-        document.getElementById('userManagePage').classList.add('hidden');
-        document.getElementById('orderPage').classList.remove('hidden');
-    }
-
-    function renderUserTable() {
-        let t = document.getElementById('userTable');
-        let kw = document.getElementById('userSearch').value.toLowerCase();
-        let list = staffUsers.filter(u => {
-            if (u.role === 'admin') return false;
-            let a = (u.account || '').toLowerCase();
-            let r = (u.roleName || '').toLowerCase();
-            return a.includes(kw) || r.includes(kw);
-        });
-        t.innerHTML = '';
-        list.forEach(u => {
-            let tr = document.createElement('tr');
-            tr.innerHTML = `
-            <td>${u.account}</td>
-            <td><span class="tag ${u.role==='jigong'?'tag-blue':'tag-success'}">${u.roleName}</span></td>
-            <td>
-                <span class="opt-btn edit-btn" onclick="editUser('${u.account}')">编辑</span>
-                <span class="opt-btn del-btn" onclick="delUser('${u.account}')">删除</span>
-            </td>`;
-            t.appendChild(tr);
-        });
-    }
-
-    function openUserEditModal() {
-        editUserId = null;
-        document.getElementById('userEditTitle').innerText = '新增员工';
-        document.getElementById('editAccount').value = '';
-        document.getElementById('editPwd').value = '';
-        document.getElementById('editRole').value = 'chong';
-        document.getElementById('editAccount').disabled = false;
-        document.getElementById('userEditModal').style.display = 'flex';
-    }
-
-    function editUser(account) {
-        let u = staffUsers.find(x => x.account === account);
-        if (!u) return;
-        editUserId = account;
-        document.getElementById('userEditTitle').innerText = '编辑员工';
-        document.getElementById('editAccount').value = u.account;
-        document.getElementById('editPwd').value = u.pwd;
-        document.getElementById('editRole').value = u.role;
-        document.getElementById('editAccount').disabled = true;
-        document.getElementById('userEditModal').style.display = 'flex';
-    }
-
-    async function saveUser() {
-        let a = document.getElementById('editAccount').value.trim();
-        let p = document.getElementById('editPwd').value.trim();
-        let r = document.getElementById('editRole').value;
-        let rn = r === 'jigong' ? '机工' : '充绒工';
-        if (!a || !p) return alert('账号密码不能为空');
-        try {
-            if (editUserId) {
-                let userItem = staffUsers.find(x => x.account === editUserId);
-                const user = Bmob.Object(TABLE_USER);
-                user.id = userItem.objectId;
-                user.set("pwd", p);
-                user.set("role", r);
-                user.set("roleName", rn);
-                await user.save();
-            } else {
-                if (staffUsers.find(x => x.account === a)) return alert('账号已存在');
-                const user = Bmob.Object(TABLE_USER);
-                user.set("account", a);
-                user.set("pwd", p);
-                user.set("role", r);
-                user.set("roleName", rn);
-                await user.save();
-            }
-            await loadAllData();
-            closeUserEditModal();
-            alert('保存成功');
-        } catch (e) { alert('失败：'+e.message); }
-    }
-
-    async function delUser(account) {
-        if (!confirm('确定删除该员工？')) return;
-        try {
-            let userItem = staffUsers.find(x => x.account === account);
-            const user = Bmob.Object(TABLE_USER);
-            user.id = userItem.objectId;
-            await user.destroy();
-            await loadAllData();
-        } catch (e) { alert('失败：'+e.message); }
-    }
-
-    function closeUserEditModal() {
-        document.getElementById('userEditModal').style.display = 'none';
-    }
-
-    function loadJigongList() {
-        let sel = document.getElementById('jigongSelect');
-        sel.innerHTML = '<option value="">请选择机工</option>';
-        staffUsers.filter(u => u.role === 'jigong').forEach(u => {
-            let o = document.createElement('option');
-            o.value = u.account;
-            o.innerText = u.account;
-            sel.appendChild(o);
-        });
-    }
-
-    function renderTable() {
-        let tb = document.getElementById('orderTable');
-        let kw = document.getElementById('searchInput').value.toLowerCase();
-        let list = orders;
-        if (currentUser && currentUser.isCustomer) {
-            list = orders.filter(o => (o.dianhua || '') === currentUser.phone);
-        } else {
-            list = orders.filter(o => {
-                let n = (o.xingming || '').toLowerCase();
-                let p = (o.dianhua || '').toLowerCase();
-                let no = (o.orderNo || '').toLowerCase();
-                let g = (o.huohao || '').toLowerCase();
-                return n.includes(kw) || p.includes(kw) || no.includes(kw) || g.includes(kw);
-            });
-        }
-        tb.innerHTML = '';
-        list.forEach(o => {
-            let op = '';
-            if (currentUser && !currentUser.isCustomer) {
-                if (currentUser.role === 'admin') {
-                    op = `<span class="opt-btn edit-btn" onclick="editOrder('${o.objectId}')">编辑</span><span class="opt-btn del-btn" onclick="delOrder('${o.objectId}')">删除</span>`;
-                } else if (['chong','jigong'].includes(currentUser.role)) {
-                    op = `<span class="opt-btn edit-btn" onclick="editOrder('${o.objectId}')">编辑</span>`;
-                }
-            }
-            let tr = document.createElement('tr');
-            tr.innerHTML = `
-            <td><span class="order-no" onclick="showDetail('${o.objectId}')">${o.orderNo}</span></td>
-            <td>${o.chongrong || '未充绒'}</td>
-            <td>${o.jigong || ''}</td>
-            <td>${o.xingming || ''}</td>
-            <td>${o.dianhua || ''}</td>
-            <td><span class="tag ${o.shifou2==='是'?'tag-success':'tag-danger'}">${o.shifou2||'否'}</span></td>
-            <td><span class="tag ${o.shifou1==='是'?'tag-success':'tag-danger'}">${o.shifou1||'否'}</span></td>
-            <td>${o.riqi || ''}</td>
-            <td>${op}</td>`;
-            tb.appendChild(tr);
-        });
-    }
-
-    function openEditModal(id) {
-        editId = id;
-        loadJigongList();
-        let m = document.getElementById('editModal');
-        document.getElementById('editModalTitle').innerText = id ? '编辑订单' : '新增订单';
-        if (id) {
-            let o = orders.find(x => x.objectId === id);
-            document.getElementById('chongrong').value = o.chongrong || '未充绒';
-            document.getElementById('jigongSelect').value = o.jigong || '';
-            document.getElementById('shifou1').value = o.shifou1 || '否';
-            document.getElementById('xingming').value = o.xingming || '';
-            document.getElementById('dianhua').value = o.dianhua || '';
-            document.getElementById('changjia').value = o.changjia || '';
-            document.getElementById('huohao').value = o.huohao || '';
-            document.getElementById('yanse').value = o.yanse || '';
-            document.getElementById('daxiao').value = o.daxiao || '';
-            document.getElementById('jiage').value = o.jiage || '';
-            document.getElementById('yajin').value = o.yajin || '';
-            document.getElementById('shifou2').value = o.shifou2 || '否';
-            document.getElementById('riqi').value = o.riqi || '';
-            document.getElementById('beizhu').value = o.beizhu || '';
-            document.getElementById('qianshou').value = o.qianshou || '否';
-            let all = m.querySelectorAll('input,select');
-            all.forEach(e => e.disabled = true);
-            if (currentUser.role === 'chong') document.getElementById('chongrong').disabled = false;
-            else if (currentUser.role === 'jigong') {
-                document.getElementById('jigongSelect').disabled = false;
-                document.getElementById('shifou1').disabled = false;
-            } else if (currentUser.role === 'admin') all.forEach(e => e.disabled = false);
-        } else {
-            m.querySelectorAll('input,select').forEach(e => e.value = '');
-            document.getElementById('chongrong').value = '未充绒';
-            m.querySelectorAll('input,select').forEach(e => e.disabled = false);
-        }
-        m.style.display = 'flex';
-    }
-
-    async function saveOrder() {
-        let d = {
-            chongrong: document.getElementById('chongrong').value,
-            jigong: document.getElementById('jigongSelect').value,
-            shifou1: document.getElementById('shifou1').value,
-            xingming: document.getElementById('xingming').value,
-            dianhua: document.getElementById('dianhua').value,
-            changjia: document.getElementById('changjia').value,
-            huohao: document.getElementById('huohao').value,
-            yanse: document.getElementById('yanse').value,
-            daxiao: document.getElementById('daxiao').value,
-            jiage: document.getElementById('jiage').value,
-            yajin: document.getElementById('yajin').value,
-            shifou2: document.getElementById('shifou2').value,
-            riqi: document.getElementById('riqi').value,
-            beizhu: document.getElementById('beizhu').value,
-            qianshou: document.getElementById('qianshou').value
-        };
-        try {
-            if (editId) {
-                const order = Bmob.Object(TABLE_ORDER);
-                order.id = editId;
-                for(let k in d) order.set(k, d[k]);
-                await order.save();
-            } else {
-                let maxNo = START_ORDER_NO;
-                orders.forEach(o => {
-                    let no = parseInt(o.orderNo);
-                    if(no>maxNo) maxNo = no;
-                });
-                const order = Bmob.Object(TABLE_ORDER);
-                for(let k in d) order.set(k, d[k]);
-                order.set('orderNo', String(maxNo+1));
-                await order.save();
-            }
-            await loadAllData();
-            closeEditModal();
-        } catch (e) { alert('失败：'+e.message); }
-    }
-
-    function editOrder(id) { openEditModal(id); }
-    async function delOrder(id) {
-        if (!confirm('确定删除该订单？')) return;
-        try {
-            const order = Bmob.Object(TABLE_ORDER);
-            order.id = id;
-            await order.destroy();
-            await loadAllData();
-        } catch (e) { alert('失败：'+e.message); }
-    }
-    function closeEditModal() { document.getElementById('editModal').style.display = 'none'; }
-    function showDetail(id) {
-        let o = orders.find(x => x.objectId === id);
-        let box = document.getElementById('detailBox');
-        box.innerHTML = `
-        <div style="padding:10px 0;border-bottom:1px solid #f0f0f0;">订单编号：${o.orderNo}</div>
-        <div style="padding:10px 0;border-bottom:1px solid #f0f0f0;">充绒状态：${o.chongrong||'未充绒'}</div>
-        <div style="padding:10px 0;border-bottom:1px solid #f0f0f0;">机工：${o.jigong||''}</div>
-        <div style="padding:10px 0;border-bottom:1px solid #f0f0f0;">是否完工：${o.shifou1||'否'}</div>
-        <div style="padding:10px 0;border-bottom:1px solid #f0f0f0;">客户姓名：${o.xingming||''}</div>
-        <div style="padding:10px 0;border-bottom:1px solid #f0f0f0;">联系电话：${o.dianhua||''}</div>
-        <div style="padding:10px 0;border-bottom:1px solid #f0f0f0;">厂家：${o.changjia||''}</div>
-        <div style="padding:10px 0;border-bottom:1px solid #f0f0f0;">货号：${o.huohao||''}</div>
-        <div style="padding:10px 0;border-bottom:1px solid #f0f0f0;">颜色：${o.yanse||''}</div>
-        <div style="padding:10px 0;border-bottom:1px solid #f0f0f0;">尺码：${o.daxiao||''}</div>
-        <div style="padding:10px 0;border-bottom:1px solid #f0f0f0;">单价：${o.jiage||''}</div>
-        <div style="padding:10px 0;border-bottom:1px solid #f0f0f0;">押金：${o.yajin||''}</div>
-        <div style="padding:10px 0;border-bottom:1px solid #f0f0f0;">是否到货：${o.shifou2||'否'}</div>
-        <div style="padding:10px 0;border-bottom:1px solid #f0f0f0;">订单日期：${o.riqi||''}</div>
-        <div style="padding:10px 0;border-bottom:1px solid #f0f0f0;">备注：${o.beizhu||''}</div>
-        <div style="padding:10px 0;">签收：${o.qianshou||'否'}</div>`;
-        document.getElementById('detailModal').style.display = 'flex';
-    }
-    function closeDetailModal() { document.getElementById('detailModal').style.display = 'none'; }
-    function exportExcel() {
-        let data = [["订单编号","充绒状态","机工","是否完工","客户姓名","电话","厂家","货号","颜色","尺码","单价","押金","是否到货","订单日期","备注","签收"]];
-        orders.forEach(o => {
-            data.push([
-                o.orderNo, o.chongrong||'未充绒', o.jigong||'', o.shifou1||'',
-                o.xingming||'', o.dianhua||'', o.changjia||'', o.huohao||'',
-                o.yanse||'', o.daxiao||'', o.jiage||'', o.yajin||'',
-                o.shifou2||'', o.riqi||'', o.beizhu||'', o.qianshou||''
-            ]);
-        });
-        let ws = XLSX.utils.aoa_to_sheet(data);
-        let wb = XLSX.utils.book_new();
-        XLSX.utils.book_append_sheet(wb, ws, "订单列表");
-        XLSX.writeFile(wb, "羽绒服订单.xlsx");
+    } catch (e) {
+        alert('加载失败：' + e.message);
     }
 }
+
+function switchTab(i) {
+    document.querySelectorAll('.tab-item').forEach((t,k) => t.className = k===i ? 'tab-item active' : 'tab-item');
+    document.getElementById('staffLogin').classList.toggle('hidden', i!==0);
+    document.getElementById('customerLogin').classList.toggle('hidden', i!==1);
+}
+
+async function staffLogin() {
+    let a = document.getElementById('loginAccount').value.trim();
+    let p = document.getElementById('loginPwd').value.trim();
+    let rem = document.getElementById('rememberPwd').checked;
+    let user = staffUsers.find(u => u.account === a && u.pwd === p);
+    if (!user) return alert('账号或密码错误');
+    if(rem) localStorage.setItem('rememberLogin', JSON.stringify({account:a,pwd:p}));
+    else localStorage.removeItem('rememberLogin');
+    currentUser = user;
+    loginOk();
+}
+
+function customerLogin() {
+    let p = document.getElementById('custPhone').value.trim();
+    if (!p) return alert('请输入手机号');
+    currentUser = { role:'customer', roleName:'客户', phone:p, isCustomer: true };
+    loginOk();
+}
+
+function loginOk() {
+    document.getElementById('loginWrap').classList.add('hidden');
+    document.getElementById('mainWrap').classList.remove('hidden');
+    document.getElementById('userRole').innerText = currentUser.isCustomer ? '客户' : currentUser.roleName;
+    document.getElementById('userName').innerText = currentUser.isCustomer ? '客户' : currentUser.account;
+    let isAdmin = !currentUser.isCustomer && currentUser.role === 'admin';
+    let isCust = currentUser.isCustomer;
+    document.getElementById('userManageBtn').classList.toggle('hidden', !isAdmin);
+    document.getElementById('addOrderBtn').classList.toggle('hidden', isCust);
+    document.getElementById('exportBtn').classList.toggle('hidden', isCust);
+    renderTable();
+}
+
+function logout() {
+    currentUser = null;
+    document.getElementById('mainWrap').classList.add('hidden');
+    document.getElementById('loginWrap').classList.remove('hidden');
+    document.getElementById('orderPage').classList.remove('hidden');
+    document.getElementById('userManagePage').classList.add('hidden');
+}
+
+function openUserManage() {
+    document.getElementById('orderPage').classList.add('hidden');
+    document.getElementById('userManagePage').classList.remove('hidden');
+    renderUserTable();
+}
+
+function backToOrder() {
+    document.getElementById('userManagePage').classList.add('hidden');
+    document.getElementById('orderPage').classList.remove('hidden');
+}
+
+function renderUserTable() {
+    let t = document.getElementById('userTable');
+    let kw = document.getElementById('userSearch').value.toLowerCase();
+    let list = staffUsers.filter(u => {
+        if (u.role === 'admin') return false;
+        let a = (u.account || '').toLowerCase();
+        let r = (u.roleName || '').toLowerCase();
+        return a.includes(kw) || r.includes(kw);
+    });
+    t.innerHTML = '';
+    list.forEach(u => {
+        let tr = document.createElement('tr');
+        tr.innerHTML = `
+        <td>${u.account}</td>
+        <td><span class="tag ${u.role==='jigong'?'tag-blue':'tag-success'}">${u.roleName}</span></td>
+        <td>
+            <span class="opt-btn edit-btn" onclick="editUser('${u.account}')">编辑</span>
+            <span class="opt-btn del-btn" onclick="delUser('${u.account}')">删除</span>
+        </td>`;
+        t.appendChild(tr);
+    });
+}
+
+function openUserEditModal() {
+    editUserId = null;
+    document.getElementById('userEditTitle').innerText = '新增员工';
+    document.getElementById('editAccount').value = '';
+    document.getElementById('editPwd').value = '';
+    document.getElementById('editRole').value = 'chong';
+    document.getElementById('editAccount').disabled = false;
+    document.getElementById('userEditModal').style.display = 'flex';
+}
+
+function editUser(account) {
+    let u = staffUsers.find(x => x.account === account);
+    if (!u) return;
+    editUserId = account;
+    document.getElementById('userEditTitle').innerText = '编辑员工';
+    document.getElementById('editAccount').value = u.account;
+    document.getElementById('editPwd').value = u.pwd;
+    document.getElementById('editRole').value = u.role;
+    document.getElementById('editAccount').disabled = true;
+    document.getElementById('userEditModal').style.display = 'flex';
+}
+
+async function saveUser() {
+    let a = document.getElementById('editAccount').value.trim();
+    let p = document.getElementById('editPwd').value.trim();
+    let r = document.getElementById('editRole').value;
+    let rn = r === 'jigong' ? '机工' : '充绒工';
+    if (!a || !p) return alert('账号密码不能为空');
+    try {
+        if (editUserId) {
+            let userItem = staffUsers.find(x => x.account === editUserId);
+            const user = Bmob.Object(TABLE_USER);
+            user.id = userItem.objectId;
+            user.set("pwd", p);
+            user.set("role", r);
+            user.set("roleName", rn);
+            await user.save();
+        } else {
+            if (staffUsers.find(x => x.account === a)) return alert('账号已存在');
+            const user = Bmob.Object(TABLE_USER);
+            user.set("account", a);
+            user.set("pwd", p);
+            user.set("role", r);
+            user.set("roleName", rn);
+            await user.save();
+        }
+        await loadAllData();
+        closeUserEditModal();
+        alert('保存成功');
+    } catch (e) { alert('失败：'+e.message); }
+}
+
+async function delUser(account) {
+    if (!confirm('确定删除该员工？')) return;
+    try {
+        let userItem = staffUsers.find(x => x.account === account);
+        const user = Bmob.Object(TABLE_USER);
+        user.id = userItem.objectId;
+        await user.destroy();
+        await loadAllData();
+    } catch (e) { alert('失败：'+e.message); }
+}
+
+function closeUserEditModal() {
+    document.getElementById('userEditModal').style.display = 'none';
+}
+
+function loadJigongList() {
+    let sel = document.getElementById('jigongSelect');
+    sel.innerHTML = '<option value="">请选择机工</option>';
+    staffUsers.filter(u => u.role === 'jigong').forEach(u => {
+        let o = document.createElement('option');
+        o.value = u.account;
+        o.innerText = u.account;
+        sel.appendChild(o);
+    });
+}
+
+function renderTable() {
+    let tb = document.getElementById('orderTable');
+    let kw = document.getElementById('searchInput').value.toLowerCase();
+    let list = orders;
+    if (currentUser && currentUser.isCustomer) {
+        list = orders.filter(o => (o.dianhua || '') === currentUser.phone);
+    } else {
+        list = orders.filter(o => {
+            let n = (o.xingming || '').toLowerCase();
+            let p = (o.dianhua || '').toLowerCase();
+            let no = (o.orderNo || '').toLowerCase();
+            let g = (o.huohao || '').toLowerCase();
+            return n.includes(kw) || p.includes(kw) || no.includes(kw) || g.includes(kw);
+        });
+    }
+    tb.innerHTML = '';
+    list.forEach(o => {
+        let op = '';
+        if (currentUser && !currentUser.isCustomer) {
+            if (currentUser.role === 'admin') {
+                op = `<span class="opt-btn edit-btn" onclick="editOrder('${o.objectId}')">编辑</span><span class="opt-btn del-btn" onclick="delOrder('${o.objectId}')">删除</span>`;
+            } else if (['chong','jigong'].includes(currentUser.role)) {
+                op = `<span class="opt-btn edit-btn" onclick="editOrder('${o.objectId}')">编辑</span>`;
+            }
+        }
+        let tr = document.createElement('tr');
+        tr.innerHTML = `
+        <td><span class="order-no" onclick="showDetail('${o.objectId}')">${o.orderNo}</span></td>
+        <td>${o.chongrong || '未充绒'}</td>
+        <td>${o.jigong || ''}</td>
+        <td>${o.xingming || ''}</td>
+        <td>${o.dianhua || ''}</td>
+        <td><span class="tag ${o.shifou2==='是'?'tag-success':'tag-danger'}">${o.shifou2||'否'}</span></td>
+        <td><span class="tag ${o.shifou1==='是'?'tag-success':'tag-danger'}">${o.shifou1||'否'}</span></td>
+        <td>${o.riqi || ''}</td>
+        <td>${op}</td>`;
+        tb.appendChild(tr);
+    });
+}
+
+function openEditModal(id) {
+    editId = id;
+    loadJigongList();
+    let m = document.getElementById('editModal');
+    document.getElementById('editModalTitle').innerText = id ? '编辑订单' : '新增订单';
+    if (id) {
+        let o = orders.find(x => x.objectId === id);
+        document.getElementById('chongrong').value = o.chongrong || '未充绒';
+        document.getElementById('jigongSelect').value = o.jigong || '';
+        document.getElementById('shifou1').value = o.shifou1 || '否';
+        document.getElementById('xingming').value = o.xingming || '';
+        document.getElementById('dianhua').value = o.dianhua || '';
+        document.getElementById('changjia').value = o.changjia || '';
+        document.getElementById('huohao').value = o.huohao || '';
+        document.getElementById('yanse').value = o.yanse || '';
+        document.getElementById('daxiao').value = o.daxiao || '';
+        document.getElementById('jiage').value = o.jiage || '';
+        document.getElementById('yajin').value = o.yajin || '';
+        document.getElementById('shifou2').value = o.shifou2 || '否';
+        document.getElementById('riqi').value = o.riqi || '';
+        document.getElementById('beizhu').value = o.beizhu || '';
+        document.getElementById('qianshou').value = o.qianshou || '否';
+        let all = m.querySelectorAll('input,select');
+        all.forEach(e => e.disabled = true);
+        if (currentUser.role === 'chong') document.getElementById('chongrong').disabled = false;
+        else if (currentUser.role === 'jigong') {
+            document.getElementById('jigongSelect').disabled = false;
+            document.getElementById('shifou1').disabled = false;
+        } else if (currentUser.role === 'admin') all.forEach(e => e.disabled = false);
+    } else {
+        m.querySelectorAll('input,select').forEach(e => e.value = '');
+        document.getElementById('chongrong').value = '未充绒';
+        m.querySelectorAll('input,select').forEach(e => e.disabled = false);
+    }
+    m.style.display = 'flex';
+}
+
+async function saveOrder() {
+    let d = {
+        chongrong: document.getElementById('chongrong').value,
+        jigong: document.getElementById('jigongSelect').value,
+        shifou1: document.getElementById('shifou1').value,
+        xingming: document.getElementById('xingming').value,
+        dianhua: document.getElementById('dianhua').value,
+        changjia: document.getElementById('changjia').value,
+        huohao: document.getElementById('huohao').value,
+        yanse: document.getElementById('yanse').value,
+        daxiao: document.getElementById('daxiao').value,
+        jiage: document.getElementById('jiage').value,
+        yajin: document.getElementById('yajin').value,
+        shifou2: document.getElementById('shifou2').value,
+        riqi: document.getElementById('riqi').value,
+        beizhu: document.getElementById('beizhu').value,
+        qianshou: document.getElementById('qianshou').value
+    };
+    try {
+        if (editId) {
+            const order = Bmob.Object(TABLE_ORDER);
+            order.id = editId;
+            for(let k in d) order.set(k, d[k]);
+            await order.save();
+        } else {
+            let maxNo = START_ORDER_NO;
+            orders.forEach(o => {
+                let no = parseInt(o.orderNo);
+                if(no>maxNo) maxNo = no;
+            });
+            const order = Bmob.Object(TABLE_ORDER);
+            for(let k in d) order.set(k, d[k]);
+            order.set('orderNo', String(maxNo+1));
+            await order.save();
+        }
+        await loadAllData();
+        closeEditModal();
+    } catch (e) { alert('失败：'+e.message); }
+}
+
+function editOrder(id) { openEditModal(id); }
+async function delOrder(id) {
+    if (!confirm('确定删除该订单？')) return;
+    try {
+        const order = Bmob.Object(TABLE_ORDER);
+        order.id = id;
+        await order.destroy();
+        await loadAllData();
+    } catch (e) { alert('失败：'+e.message); }
+}
+function closeEditModal() { document.getElementById('editModal').style.display = 'none'; }
+function showDetail(id) {
+    let o = orders.find(x => x.objectId === id);
+    let box = document.getElementById('detailBox');
+    box.innerHTML = `
+    <div style="padding:10px 0;border-bottom:1px solid #f0f0f0;">订单编号：${o.orderNo}</div>
+    <div style="padding:10px 0;border-bottom:1px solid #f0f0f0;">充绒状态：${o.chongrong||'未充绒'}</div>
+    <div style="padding:10px 0;border-bottom:1px solid #f0f0f0;">机工：${o.jigong||''}</div>
+    <div style="padding:10px 0;border-bottom:1px solid #f0f0f0;">是否完工：${o.shifou1||'否'}</div>
+    <div style="padding:10px 0;border-bottom:1px solid #f0f0f0;">客户姓名：${o.xingming||''}</div>
+    <div style="padding:10px 0;border-bottom:1px solid #f0f0f0;">联系电话：${o.dianhua||''}</div>
+    <div style="padding:10px 0;border-bottom:1px solid #f0f0f0;">厂家：${o.changjia||''}</div>
+    <div style="padding:10px 0;border-bottom:1px solid #f0f0f0;">货号：${o.huohao||''}</div>
+    <div style="padding:10px 0;border-bottom:1px solid #f0f0f0;">颜色：${o.yanse||''}</div>
+    <div style="padding:10px 0;border-bottom:1px solid #f0f0f0;">尺码：${o.daxiao||''}</div>
+    <div style="padding:10px 0;border-bottom:1px solid #f0f0f0;">单价：${o.jiage||''}</div>
+    <div style="padding:10px 0;border-bottom:1px solid #f0f0f0;">押金：${o.yajin||''}</div>
+    <div style="padding:10px 0;border-bottom:1px solid #f0f0f0;">是否到货：${o.shifou2||'否'}</div>
+    <div style="padding:10px 0;border-bottom:1px solid #f0f0f0;">订单日期：${o.riqi||''}</div>
+    <div style="padding:10px 0;border-bottom:1px solid #f0f0f0;">备注：${o.beizhu||''}</div>
+    <div style="padding:10px 0;">签收：${o.qianshou||'否'}</div>`;
+    document.getElementById('detailModal').style.display = 'flex';
+}
+function closeDetailModal() { document.getElementById('detailModal').style.display = 'none'; }
+function exportExcel() {
+    let data = [["订单编号","充绒状态","机工","是否完工","客户姓名","电话","厂家","货号","颜色","尺码","单价","押金","是否到货","订单日期","备注","签收"]];
+    orders.forEach(o => {
+        data.push([
+            o.orderNo, o.chongrong||'未充绒', o.jigong||'', o.shifou1||'',
+            o.xingming||'', o.dianhua||'', o.changjia||'', o.huohao||'',
+            o.yanse||'', o.daxiao||'', o.jiage||'', o.yajin||'',
+            o.shifou2||'', o.riqi||'', o.beizhu||'', o.qianshou||''
+        ]);
+    });
+    let ws = XLSX.utils.aoa_to_sheet(data);
+    let wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, "订单列表");
+    XLSX.writeFile(wb, "羽绒服订单.xlsx");
+}
+
+// 暴露为全局函数，解决 onclick 调用报错
+window.switchTab = switchTab;
+window.staffLogin = staffLogin;
+window.customerLogin = customerLogin;
+window.logout = logout;
+window.openUserManage = openUserManage;
+window.backToOrder = backToOrder;
+window.openUserEditModal = openUserEditModal;
+window.editUser = editUser;
+window.saveUser = saveUser;
+window.delUser = delUser;
+window.closeUserEditModal = closeUserEditModal;
+window.openEditModal = openEditModal;
+window.saveOrder = saveOrder;
+window.editOrder = editOrder;
+window.delOrder = delOrder;
+window.closeEditModal = closeEditModal;
+window.showDetail = showDetail;
+window.closeDetailModal = closeDetailModal;
+window.exportExcel = exportExcel;
+
+// 启动程序
 initApp();
 </script>
 </body>
