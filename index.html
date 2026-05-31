@@ -1,0 +1,862 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>羽绒服服装管理系统</title>
+    <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/leancloud-storage@4.15.0/dist/av-min.js"></script>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            font-family: "Microsoft YaHei", "微软雅黑", sans-serif;
+        }
+
+        body {
+            background: linear-gradient(135deg, #f0f7ff 0%, #d9e6f8 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+
+        .login-container {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: calc(100vh - 40px);
+        }
+
+        .login-card {
+            background: #ffffff;
+            width: 100%;
+            max-width: 460px;
+            border-radius: 20px;
+            box-shadow: 0 10px 30px rgba(0, 51, 102, 0.1);
+            padding: 45px 40px;
+            border-top: 5px solid #3a7bd5;
+        }
+
+        .login-title {
+            text-align: center;
+            font-size: 26px;
+            font-weight: 600;
+            color: #224466;
+            margin-bottom: 12px;
+        }
+
+        .login-subtitle {
+            text-align: center;
+            color: #6688aa;
+            margin-bottom: 35px;
+            font-size: 14px;
+        }
+
+        .tab-group {
+            display: flex;
+            border-bottom: 1px solid #e6eff8;
+            margin-bottom: 25px;
+        }
+
+        .tab-item {
+            flex: 1;
+            text-align: center;
+            padding: 12px 0;
+            cursor: pointer;
+            color: #7799bb;
+            font-weight: 500;
+            border-bottom: 3px solid transparent;
+            transition: all 0.3s;
+        }
+
+        .tab-item.active {
+            color: #3a7bd5;
+            border-color: #3a7bd5;
+        }
+
+        .form-group {
+            margin-bottom: 22px;
+        }
+
+        .form-group label {
+            display: block;
+            margin-bottom: 8px;
+            color: #334455;
+            font-size: 14px;
+            font-weight: 500;
+        }
+
+        .form-control {
+            width: 100%;
+            height: 46px;
+            border: 1px solid #d6e4f3;
+            border-radius: 10px;
+            padding: 0 15px;
+            font-size: 15px;
+            color: #224466;
+            transition: border 0.3s;
+        }
+
+        .form-control:focus {
+            outline: none;
+            border-color: #3a7bd5;
+            box-shadow: 0 0 0 3px rgba(58, 123, 213, 0.1);
+        }
+
+        .remember-row {
+            display: flex;
+            align-items: center;
+            margin-bottom: 25px;
+            font-size: 14px;
+            color: #557799;
+        }
+
+        .remember-row input {
+            margin-right: 8px;
+            width: 16px;
+            height: 16px;
+        }
+
+        .btn-login {
+            width: 100%;
+            height: 48px;
+            background: linear-gradient(90deg, #3a7bd5, #4a90e2);
+            color: #fff;
+            border: none;
+            border-radius: 12px;
+            font-size: 16px;
+            font-weight: 500;
+            cursor: pointer;
+            transition: transform 0.2s;
+        }
+
+        .btn-login:hover {
+            transform: translateY(-1px);
+        }
+
+        .main-container {
+            max-width: 1200px;
+            margin: 0 auto;
+            background: #fff;
+            border-radius: 16px;
+            box-shadow: 0 5px 20px rgba(0, 51, 102, 0.08);
+            padding: 30px;
+            overflow: hidden;
+        }
+
+        .user-bar {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            background: #f5f9ff;
+            padding: 14px 20px;
+            border-radius: 12px;
+            margin-bottom: 25px;
+            color: #224466;
+        }
+
+        .page-title {
+            font-size: 24px;
+            color: #224466;
+            font-weight: 600;
+            margin-bottom: 20px;
+            padding-left: 12px;
+            border-left: 4px solid #3a7bd5;
+        }
+
+        .toolbar {
+            display: flex;
+            gap: 12px;
+            flex-wrap: wrap;
+            margin-bottom: 20px;
+            align-items: center;
+        }
+
+        .btn {
+            padding: 10px 18px;
+            border-radius: 10px;
+            font-size: 14px;
+            font-weight: 500;
+            border: none;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .btn-primary {
+            background: #3a7bd5;
+            color: #fff;
+        }
+
+        .btn-success {
+            background: #2ecc71;
+            color: #fff;
+        }
+
+        .btn-default {
+            background: #94a7c6;
+            color: #fff;
+        }
+
+        .btn-danger {
+            background: #e74c3c;
+            color: #fff;
+        }
+
+        .search-input {
+            flex: 1;
+            min-width: 280px;
+            height: 42px;
+            border: 1px solid #d6e4f3;
+            border-radius: 10px;
+            padding: 0 15px;
+            font-size: 14px;
+        }
+
+        .search-input:focus {
+            outline: none;
+            border-color: #3a7bd5;
+        }
+
+        .table-wrapper {
+            border-radius: 12px;
+            overflow: hidden;
+            border: 1px solid #e6eff8;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            background: #fff;
+        }
+
+        thead th {
+            background: linear-gradient(90deg, #3a7bd5, #4a90e2);
+            color: #fff;
+            padding: 16px 12px;
+            text-align: center;
+            font-weight: 500;
+            font-size: 14px;
+        }
+
+        tbody td {
+            padding: 14px 12px;
+            text-align: center;
+            color: #334455;
+            border-bottom: 1px solid #f0f7ff;
+            font-size: 14px;
+        }
+
+        tbody tr:hover {
+            background-color: #f7fbff;
+        }
+
+        .tag {
+            padding: 4px 10px;
+            border-radius: 12px;
+            font-size: 12px;
+            color: #fff;
+            font-weight: 500;
+        }
+
+        .tag-success { background-color: #2ecc71; }
+        .tag-danger { background-color: #e74c3c; }
+        .tag-blue { background-color: #3a7bd5; }
+
+        .opt-btn {
+            padding: 4px 10px;
+            border-radius: 6px;
+            font-size: 13px;
+            cursor: pointer;
+            margin: 0 3px;
+        }
+
+        .edit-btn {
+            background: #e6f0ff;
+            color: #3a7bd5;
+        }
+
+        .del-btn {
+            background: #ffebee5;
+            color: #e74c3c;
+        }
+
+        .order-no {
+            color: #3a7bd5;
+            font-weight: 500;
+            cursor: pointer;
+        }
+
+        .modal {
+            display: none;
+            position: fixed;
+            top: 0; left: 0;
+            width: 100%; height: 100%;
+            background: rgba(0,0,0,0.3);
+            justify-content: center;
+            align-items: center;
+            z-index: 9999;
+        }
+
+        .modal-content {
+            background: #fff;
+            width: 90%;
+            max-width: 650px;
+            border-radius: 16px;
+            padding: 35px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.15);
+            max-height: 90vh;
+            overflow-y: auto;
+        }
+
+        .modal-title {
+            font-size: 20px;
+            color: #224466;
+            margin-bottom: 25px;
+            font-weight: 600;
+        }
+
+        .hidden { display: none !important; }
+        .loading { text-align: center; padding: 20px; color: #6688aa; }
+    </style>
+</head>
+<body>
+
+<div class="login-container" id="loginWrap">
+    <div class="login-card">
+        <div class="login-title">羽绒服服装管理系统</div>
+        <div class="login-subtitle">专业、高效、便捷的订单与员工管理</div>
+        <div class="tab-group">
+            <div class="tab-item active" onclick="switchTab(0)">员工 / 管理员</div>
+            <div class="tab-item" onclick="switchTab(1)">客户查询订单</div>
+        </div>
+        <div id="staffLogin">
+            <div class="form-group">
+                <label>账号</label>
+                <input type="text" class="form-control" id="loginAccount" placeholder="请输入账号">
+            </div>
+            <div class="form-group">
+                <label>密码</label>
+                <input type="password" class="form-control" id="loginPwd" placeholder="请输入密码">
+            </div>
+            <div class="remember-row">
+                <input type="checkbox" id="rememberPwd">
+                <label for="rememberPwd">记住账号密码</label>
+            </div>
+            <button class="btn-login" onclick="staffLogin()">立即登录</button>
+        </div>
+        <div id="customerLogin" class="hidden">
+            <div class="form-group">
+                <label>下单手机号</label>
+                <input type="text" class="form-control" id="custPhone" placeholder="请输入手机号">
+            </div>
+            <button class="btn-login" onclick="customerLogin()">查询订单</button>
+        </div>
+    </div>
+</div>
+
+<div id="mainWrap" class="main-container hidden">
+    <div class="user-bar">
+        <div>当前身份：<span id="userRole"></span>｜账号：<span id="userName"></span></div>
+        <div>
+            <button class="btn btn-default" onclick="logout()">退出登录</button>
+            <button id="userManageBtn" class="btn btn-success hidden" onclick="openUserManage()">人员管理</button>
+        </div>
+    </div>
+
+    <div id="orderPage">
+        <div class="page-title">订单管理</div>
+        <div class="toolbar">
+            <button id="addOrderBtn" class="btn btn-primary hidden">新增订单</button>
+            <button id="exportBtn" class="btn btn-success hidden" onclick="exportExcel()">导出Excel</button>
+            <input type="text" class="search-input" id="searchInput" placeholder="搜索：姓名 / 电话 / 订单编号 / 货号" oninput="renderTable()">
+        </div>
+        <div class="table-wrapper">
+            <table>
+                <thead>
+                    <tr>
+                        <th>订单编号</th>
+                        <th>充绒状态</th>
+                        <th>机工</th>
+                        <th>客户姓名</th>
+                        <th>联系电话</th>
+                        <th>是否到货</th>
+                        <th>是否完工</th>
+                        <th>订单日期</th>
+                        <th>操作</th>
+                    </tr>
+                </thead>
+                <tbody id="orderTable"><tr><td colspan="9" class="loading">加载中...</td></tr></tbody>
+            </table>
+        </div>
+    </div>
+
+    <div id="userManagePage" class="hidden">
+        <div class="page-title">人员账号管理</div>
+        <div class="toolbar">
+            <button class="btn btn-default" onclick="backToOrder()">返回订单</button>
+            <button class="btn btn-primary" onclick="openUserEditModal()">新增员工</button>
+            <input type="text" class="search-input" id="userSearch" placeholder="搜索账号" oninput="renderUserTable()">
+        </div>
+        <div class="table-wrapper">
+            <table>
+                <thead>
+                    <tr>
+                        <th>员工账号</th>
+                        <th>岗位角色</th>
+                        <th>操作</th>
+                    </tr>
+                </thead>
+                <tbody id="userTable"></tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+<div class="modal" id="editModal">
+    <div class="modal-content">
+        <div class="modal-title" id="editModalTitle">编辑订单</div>
+        <div class="form-group"><label>充绒状态</label><select class="form-control" id="chongrong"><option value="未充绒">未充绒</option><option value="已充绒">已充绒</option></select></div>
+        <div class="form-group"><label>机工</label><select class="form-control" id="jigongSelect"></select></div>
+        <div class="form-group"><label>是否完工</label><select class="form-control" id="shifou1"><option value="否">否</option><option value="是">是</option></select></div>
+        <div class="form-group"><label>客户姓名</label><input class="form-control" type="text" id="xingming"></div>
+        <div class="form-group"><label>联系电话</label><input class="form-control" type="text" id="dianhua"></div>
+        <div class="form-group"><label>厂家</label><input class="form-control" type="text" id="changjia"></div>
+        <div class="form-group"><label>货号</label><input class="form-control" type="text" id="huohao"></div>
+        <div class="form-group"><label>颜色</label><input class="form-control" type="text" id="yanse"></div>
+        <div class="form-group"><label>尺码</label><input class="form-control" type="text" id="daxiao"></div>
+        <div class="form-group"><label>单价</label><input class="form-control" type="number" id="jiage"></div>
+        <div class="form-group"><label>押金</label><input class="form-control" type="number" id="yajin"></div>
+        <div class="form-group"><label>是否到货</label><select class="form-control" id="shifou2"><option value="否">否</option><option value="是">是</option></select></div>
+        <div class="form-group"><label>订单日期</label><input class="form-control" type="date" id="riqi"></div>
+        <div class="form-group"><label>备注</label><input class="form-control" type="text" id="beizhu"></div>
+        <div class="form-group"><label>签收</label><select class="form-control" id="qianshou"><option value="否">否</option><option value="是">是</option></select></div>
+        <div style="display:flex;justify-content:flex-end;gap:10px;margin-top:25px;">
+            <button class="btn btn-default" onclick="closeEditModal()">取消</button>
+            <button class="btn btn-primary" onclick="saveOrder()">保存</button>
+        </div>
+    </div>
+</div>
+
+<div class="modal" id="userEditModal">
+    <div class="modal-content">
+        <div class="modal-title" id="userEditTitle">新增员工</div>
+        <div class="form-group"><label>账号</label><input class="form-control" type="text" id="editAccount"></div>
+        <div class="form-group"><label>密码</label><input class="form-control" type="text" id="editPwd"></div>
+        <div class="form-group"><label>岗位</label><select class="form-control" id="editRole"><option value="chong">充绒工</option><option value="jigong">机工</option></select></div>
+        <div style="display:flex;justify-content:flex-end;gap:10px;margin-top:25px;">
+            <button class="btn btn-default" onclick="closeUserEditModal()">取消</button>
+            <button class="btn btn-primary" onclick="saveUser()">保存</button>
+        </div>
+    </div>
+</div>
+
+<div class="modal" id="detailModal">
+    <div class="modal-content">
+        <div class="modal-title">订单详情</div>
+        <div id="detailBox"></div>
+        <div style="display:flex;justify-content:flex-end;margin-top:25px;">
+            <button class="btn btn-default" onclick="closeDetailModal()">关闭</button>
+        </div>
+    </div>
+</div>
+
+<script>
+// ==================== 修复跨域问题：使用代理兼容配置 ====================
+AV.init({
+    appId: "BqXJ5rLs1De1D1v3eV8n3KnB-MdYXBpaYb1Q4aF",
+    appKey: "6k8wLcV7Ld0nG1gB5eF9aQ2jR7sT5cU1iO8pE2wR4",
+    serverURL: "https://bcx5rls1.lc-cn-e1-shared.com",
+    useCdn: true
+});
+
+const Order = AV.Object.extend('Order');
+const User = AV.Object.extend('User');
+const START_ORDER_NO = 80230001;
+
+let currentUser = null;
+let editId = null;
+let editUserId = null;
+let staffUsers = [];
+let orders = [];
+
+window.onload = async function(){
+    await loadAllData();
+    let save = localStorage.getItem('rememberLogin');
+    if(save){
+        let data = JSON.parse(save);
+        document.getElementById('loginAccount').value = data.account || '';
+        document.getElementById('loginPwd').value = data.pwd || '';
+        document.getElementById('rememberPwd').checked = true;
+    }
+};
+
+// 加载云端全部数据
+async function loadAllData() {
+    try {
+        let uQuery = new AV.Query(User);
+        staffUsers = await uQuery.find();
+        if(staffUsers.length === 0) {
+            const admin = new User();
+            admin.set('account', 'HQQ8023');
+            admin.set('pwd', '580231');
+            admin.set('role', 'admin');
+            admin.set('roleName', '管理员');
+            await admin.save();
+            staffUsers = [admin];
+        }
+
+        let oQuery = new AV.Query(Order);
+        oQuery.ascending('createdAt');
+        orders = await oQuery.find();
+        renderTable();
+    } catch (e) {
+        alert('加载失败：'+e.message);
+    }
+}
+
+// ==================== 登录 ====================
+function switchTab(i) {
+    document.querySelectorAll('.tab-item').forEach((t,k) => t.className = k===i ? 'tab-item active' : 'tab-item');
+    document.getElementById('staffLogin').classList.toggle('hidden', i!==0);
+    document.getElementById('customerLogin').classList.toggle('hidden', i!==1);
+}
+
+async function staffLogin() {
+    let a = document.getElementById('loginAccount').value.trim();
+    let p = document.getElementById('loginPwd').value.trim();
+    let rem = document.getElementById('rememberPwd').checked;
+
+    let user = staffUsers.find(u => u.get('account') === a && u.get('pwd') === p);
+    if (!user) return alert('账号或密码错误');
+
+    if(rem) localStorage.setItem('rememberLogin', JSON.stringify({account:a,pwd:p}));
+    else localStorage.removeItem('rememberLogin');
+
+    currentUser = user;
+    loginOk();
+}
+
+function customerLogin() {
+    let p = document.getElementById('custPhone').value.trim();
+    if (!p) return alert('请输入手机号');
+    currentUser = { role:'customer', roleName:'客户', phone:p, isCustomer: true };
+    loginOk();
+}
+
+function loginOk() {
+    document.getElementById('loginWrap').classList.add('hidden');
+    document.getElementById('mainWrap').classList.remove('hidden');
+    document.getElementById('userRole').innerText = currentUser.isCustomer ? '客户' : currentUser.get('roleName');
+    document.getElementById('userName').innerText = currentUser.isCustomer ? '客户' : currentUser.get('account');
+
+    let isAdmin = !currentUser.isCustomer && currentUser.get('role') === 'admin';
+    let isCust = currentUser.isCustomer;
+
+    document.getElementById('userManageBtn').classList.toggle('hidden', !isAdmin);
+    document.getElementById('addOrderBtn').classList.toggle('hidden', isCust);
+    document.getElementById('exportBtn').classList.toggle('hidden', isCust);
+    document.getElementById('addOrderBtn').onclick = ()=>openEditModal(null);
+    renderTable();
+}
+
+function logout() {
+    currentUser = null;
+    document.getElementById('mainWrap').classList.add('hidden');
+    document.getElementById('loginWrap').classList.remove('hidden');
+    document.getElementById('orderPage').classList.remove('hidden');
+    document.getElementById('userManagePage').classList.add('hidden');
+}
+
+// ==================== 人员管理 ====================
+function openUserManage() {
+    document.getElementById('orderPage').classList.add('hidden');
+    document.getElementById('userManagePage').classList.remove('hidden');
+    renderUserTable();
+}
+
+function backToOrder() {
+    document.getElementById('userManagePage').classList.add('hidden');
+    document.getElementById('orderPage').classList.remove('hidden');
+}
+
+function renderUserTable() {
+    let t = document.getElementById('userTable');
+    let kw = document.getElementById('userSearch').value.toLowerCase();
+    let list = staffUsers.filter(u => {
+        let role = u.get('role');
+        if (role === 'admin') return false;
+        let a = (u.get('account') || '').toLowerCase();
+        let r = (u.get('roleName') || '').toLowerCase();
+        return a.includes(kw) || r.includes(kw);
+    });
+    t.innerHTML = '';
+    list.forEach(u => {
+        let tr = document.createElement('tr');
+        let account = u.get('account');
+        let roleName = u.get('roleName');
+        let role = u.get('role');
+        tr.innerHTML = `
+        <td>${account}</td>
+        <td><span class="tag ${role==='jigong'?'tag-blue':'tag-success'}">${roleName}</span></td>
+        <td>
+            <span class="opt-btn edit-btn" onclick="editUser('${account}')">编辑</span>
+            <span class="opt-btn del-btn" onclick="delUser('${account}')">删除</span>
+        </td>`;
+        t.appendChild(tr);
+    });
+}
+
+function openUserEditModal() {
+    editUserId = null;
+    document.getElementById('userEditTitle').innerText = '新增员工';
+    document.getElementById('editAccount').value = '';
+    document.getElementById('editPwd').value = '';
+    document.getElementById('editRole').value = 'chong';
+    document.getElementById('editAccount').disabled = false;
+    document.getElementById('userEditModal').style.display = 'flex';
+}
+
+function editUser(account) {
+    let u = staffUsers.find(x => x.get('account') === account);
+    if (!u) return;
+    editUserId = account;
+    document.getElementById('userEditTitle').innerText = '编辑员工';
+    document.getElementById('editAccount').value = u.get('account');
+    document.getElementById('editPwd').value = u.get('pwd');
+    document.getElementById('editRole').value = u.get('role');
+    document.getElementById('editAccount').disabled = true;
+    document.getElementById('userEditModal').style.display = 'flex';
+}
+
+async function saveUser() {
+    let a = document.getElementById('editAccount').value.trim();
+    let p = document.getElementById('editPwd').value.trim();
+    let r = document.getElementById('editRole').value;
+    let rn = r === 'jigong' ? '机工' : '充绒工';
+    if (!a || !p) return alert('账号密码不能为空');
+
+    try {
+        if (editUserId) {
+            let u = staffUsers.find(x => x.get('account') === editUserId);
+            if (u) {
+                u.set('pwd', p);
+                u.set('role', r);
+                u.set('roleName', rn);
+                await u.save();
+            }
+        } else {
+            if (staffUsers.find(x => x.get('account') === a)) return alert('账号已存在');
+            const user = new User();
+            user.set('account', a);
+            user.set('pwd', p);
+            user.set('role', r);
+            user.set('roleName', rn);
+            await user.save();
+        }
+        await loadAllData();
+        closeUserEditModal();
+        alert('保存成功');
+    } catch (e) { alert('失败：'+e.message); }
+}
+
+async function delUser(account) {
+    if (!confirm('确定删除该员工？')) return;
+    try {
+        let u = staffUsers.find(x => x.get('account') === account);
+        if (u) await u.destroy();
+        await loadAllData();
+    } catch (e) { alert('失败：'+e.message); }
+}
+
+function closeUserEditModal() {
+    document.getElementById('userEditModal').style.display = 'none';
+}
+
+// ==================== 订单 ====================
+function loadJigongList() {
+    let sel = document.getElementById('jigongSelect');
+    sel.innerHTML = '<option value="">请选择机工</option>';
+    staffUsers.filter(u => u.get('role') === 'jigong').forEach(u => {
+        let o = document.createElement('option');
+        o.value = u.get('account');
+        o.innerText = u.get('account');
+        sel.appendChild(o);
+    });
+}
+
+function renderTable() {
+    let tb = document.getElementById('orderTable');
+    let kw = document.getElementById('searchInput').value.toLowerCase();
+    let list = orders;
+    if (currentUser && currentUser.isCustomer) {
+        list = orders.filter(o => (o.get('dianhua') || '') === currentUser.phone);
+    } else {
+        list = orders.filter(o => {
+            let n = (o.get('xingming') || '').toLowerCase();
+            let p = (o.get('dianhua') || '').toLowerCase();
+            let no = (o.get('orderNo') || '').toLowerCase();
+            let d = (o.get('riqi') || '').toLowerCase();
+            let g = (o.get('huohao') || '').toLowerCase();
+            return n.includes(kw) || p.includes(kw) || no.includes(kw) || d.includes(kw) || g.includes(kw);
+        });
+    }
+    tb.innerHTML = '';
+    list.forEach(o => {
+        let op = '';
+        if (currentUser && !currentUser.isCustomer) {
+            if (currentUser.get('role') === 'admin') {
+                op = `<span class="opt-btn edit-btn" onclick="editOrder('${o.id}')">编辑</span><span class="opt-btn del-btn" onclick="delOrder('${o.id}')">删除</span>`;
+            } else if (['chong','jigong'].includes(currentUser.get('role'))) {
+                op = `<span class="opt-btn edit-btn" onclick="editOrder('${o.id}')">编辑</span>`;
+            }
+        }
+        
+        let tr = document.createElement('tr');
+        tr.innerHTML = `
+        <td><span class="order-no" onclick="showDetail('${o.id}')">${o.get('orderNo')}</span></td>
+        <td>${o.get('chongrong') || '未充绒'}</td>
+        <td>${o.get('jigong') || ''}</td>
+        <td>${o.get('xingming') || ''}</td>
+        <td>${o.get('dianhua') || ''}</td>
+        <td><span class="tag ${o.get('shifou2')==='是'?'tag-success':'tag-danger'}">${o.get('shifou2')||'否'}</span></td>
+        <td><span class="tag ${o.get('shifou1')==='是'?'tag-success':'tag-danger'}">${o.get('shifou1')||'否'}</span></td>
+        <td>${o.get('riqi') || ''}</td>
+        <td>${op}</td>`;
+        tb.appendChild(tr);
+    });
+}
+
+function openEditModal(id) {
+    editId = id;
+    loadJigongList();
+    let m = document.getElementById('editModal');
+    document.getElementById('editModalTitle').innerText = id ? '编辑订单' : '新增订单';
+    if (id) {
+        let o = orders.find(x => x.id === id);
+        document.getElementById('chongrong').value = o.get('chongrong') || '未充绒';
+        document.getElementById('jigongSelect').value = o.get('jigong') || '';
+        document.getElementById('shifou1').value = o.get('shifou1') || '否';
+        document.getElementById('xingming').value = o.get('xingming') || '';
+        document.getElementById('dianhua').value = o.get('dianhua') || '';
+        document.getElementById('changjia').value = o.get('changjia') || '';
+        document.getElementById('huohao').value = o.get('huohao') || '';
+        document.getElementById('yanse').value = o.get('yanse') || '';
+        document.getElementById('daxiao').value = o.get('daxiao') || '';
+        document.getElementById('jiage').value = o.get('jiage') || '';
+        document.getElementById('yajin').value = o.get('yajin') || '';
+        document.getElementById('shifou2').value = o.get('shifou2') || '否';
+        document.getElementById('riqi').value = o.get('riqi') || '';
+        document.getElementById('beizhu').value = o.get('beizhu') || '';
+        document.getElementById('qianshou').value = o.get('qianshou') || '否';
+
+        let all = m.querySelectorAll('input,select');
+        all.forEach(e => e.disabled = true);
+        if (currentUser.get('role') === 'chong') document.getElementById('chongrong').disabled = false;
+        else if (currentUser.get('role') === 'jigong') {
+            document.getElementById('jigongSelect').disabled = false;
+            document.getElementById('shifou1').disabled = false;
+            for (let opt of document.getElementById('jigongSelect').options) {
+                opt.disabled = opt.value !== currentUser.get('account');
+            }
+        } else if (currentUser.get('role') === 'admin') all.forEach(e => e.disabled = false);
+    } else {
+        m.querySelectorAll('input,select').forEach(e => e.value = '');
+        document.getElementById('chongrong').value = '未充绒';
+        m.querySelectorAll('input,select').forEach(e => e.disabled = false);
+    }
+    m.style.display = 'flex';
+}
+
+async function saveOrder() {
+    let d = {
+        chongrong: document.getElementById('chongrong').value,
+        jigong: document.getElementById('jigongSelect').value,
+        shifou1: document.getElementById('shifou1').value,
+        xingming: document.getElementById('xingming').value,
+        dianhua: document.getElementById('dianhua').value,
+        changjia: document.getElementById('changjia').value,
+        huohao: document.getElementById('huohao').value,
+        yanse: document.getElementById('yanse').value,
+        daxiao: document.getElementById('daxiao').value,
+        jiage: document.getElementById('jiage').value,
+        yajin: document.getElementById('yajin').value,
+        shifou2: document.getElementById('shifou2').value,
+        riqi: document.getElementById('riqi').value,
+        beizhu: document.getElementById('beizhu').value,
+        qianshou: document.getElementById('qianshou').value
+    };
+    try {
+        if (editId) {
+            let o = orders.find(x => x.id === editId);
+            for(let k in d) o.set(k, d[k]);
+            await o.save();
+        } else {
+            let maxNo = START_ORDER_NO;
+            orders.forEach(o => {
+                let no = parseInt(o.get('orderNo'));
+                if(no>maxNo) maxNo = no;
+            });
+            const order = new Order();
+            for(let k in d) order.set(k, d[k]);
+            order.set('orderNo', String(maxNo+1));
+            await order.save();
+        }
+        await loadAllData();
+        closeEditModal();
+    } catch (e) { alert('失败：'+e.message); }
+}
+
+function editOrder(id) { openEditModal(id); }
+async function delOrder(id) {
+    if (!confirm('确定删除该订单？')) return;
+    try {
+        let o = orders.find(x => x.id === id);
+        await o.destroy();
+        await loadAllData();
+    } catch (e) { alert('失败：'+e.message); }
+}
+function closeEditModal() { document.getElementById('editModal').style.display = 'none'; }
+
+function showDetail(id) {
+    let o = orders.find(x => x.id === id);
+    let box = document.getElementById('detailBox');
+    box.innerHTML = `
+    <div style="padding:10px 0;border-bottom:1px solid #f0f0f0;">订单编号：${o.get('orderNo')}</div>
+    <div style="padding:10px 0;border-bottom:1px solid #f0f0f0;">充绒状态：${o.get('chongrong')||'未充绒'}</div>
+    <div style="padding:10px 0;border-bottom:1px solid #f0f0f0;">机工：${o.get('jigong')||''}</div>
+    <div style="padding:10px 0;border-bottom:1px solid #f0f0f0;">是否完工：${o.get('shifou1')||'否'}</div>
+    <div style="padding:10px 0;border-bottom:1px solid #f0f0f0;">客户姓名：${o.get('xingming')||''}</div>
+    <div style="padding:10px 0;border-bottom:1px solid #f0f0f0;">联系电话：${o.get('dianhua')||''}</div>
+    <div style="padding:10px 0;border-bottom:1px solid #f0f0f0;">厂家：${o.get('changjia')||''}</div>
+    <div style="padding:10px 0;border-bottom:1px solid #f0f0f0;">货号：${o.get('huohao')||''}</div>
+    <div style="padding:10px 0;border-bottom:1px solid #f0f0f0;">颜色：${o.get('yanse')||''}</div>
+    <div style="padding:10px 0;border-bottom:1px solid #f0f0f0;">尺码：${o.get('daxiao')||''}</div>
+    <div style="padding:10px 0;border-bottom:1px solid #f0f0f0;">单价：${o.get('jiage')||''}</div>
+    <div style="padding:10px 0;border-bottom:1px solid #f0f0f0;">押金：${o.get('yajin')||''}</div>
+    <div style="padding:10px 0;border-bottom:1px solid #f0f0f0;">是否到货：${o.get('shifou2')||'否'}</div>
+    <div style="padding:10px 0;border-bottom:1px solid #f0f0f0;">订单日期：${o.get('riqi')||''}</div>
+    <div style="padding:10px 0;border-bottom:1px solid #f0f0f0;">备注：${o.get('beizhu')||''}</div>
+    <div style="padding:10px 0;">签收：${o.get('qianshou')||'否'}</div>`;
+    document.getElementById('detailModal').style.display = 'flex';
+}
+
+function closeDetailModal() { document.getElementById('detailModal').style.display = 'none'; }
+
+function exportExcel() {
+    let data = [["订单编号","充绒状态","机工","是否完工","客户姓名","电话","厂家","货号","颜色","尺码","单价","押金","是否到货","订单日期","备注","签收"]];
+    orders.forEach(o => {
+        data.push([
+            o.get('orderNo'), o.get('chongrong')||'未充绒', o.get('jigong')||'', o.get('shifou1')||'',
+            o.get('xingming')||'', o.get('dianhua')||'', o.get('changjia')||'', o.get('huohao')||'',
+            o.get('yanse')||'', o.get('daxiao')||'', o.get('jiage')||'', o.get('yajin')||'',
+            o.get('shifou2')||'', o.get('riqi')||'', o.get('beizhu')||'', o.get('qianshou')||''
+        ]);
+    });
+    let ws = XLSX.utils.aoa_to_sheet(data);
+    let wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, "订单列表");
+    XLSX.writeFile(wb, "羽绒服订单.xlsx");
+}
+</script>
+</body>
+</html>
