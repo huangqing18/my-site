@@ -6,8 +6,8 @@
     <title>羽绒服服装管理系统</title>
     <!-- Excel 导出依赖 -->
     <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
-    <!-- Bmob JS SDK -->
-    <script src="https://cdn.jsdelivr.net/npm/bmob-js-sdk@3.9.4/dist/bmob.min.js"></script>
+    <!-- Bmob JS SDK 【修复：使用稳定CDN】 -->
+    <script src="https://cdn.jsdelivr.net/npm/bmob@3.9.4/dist/bmob.min.js"></script>
     <style>
         * {
             margin: 0;
@@ -463,22 +463,24 @@
 </div>
 
 <script>
-// ========== 1. 初始化 Bmob 【此处替换为你自己的密钥】 ==========
-const APP_ID = "01650c56bc7714f7195d578d829bb531";
-const REST_KEY = "b68a28757a10b7117fdd62ba3ce7b7e8";
-Bmob.initialize(APP_ID, REST_KEY);
-Bmob.config({ useSecurity: false });    
-
-// 数据表名（自动创建，无需手动建表）
-const TABLE_USER = "StaffUser";
-const TABLE_ORDER = "OrderData";
-
-const START_ORDER_NO = 80230001;
+// ========== 修复：提前初始化变量，避免报错 ==========
+let staffUsers = [];
+let orders = [];
 let currentUser = null;
 let editId = null;
 let editUserId = null;
-let staffUsers = [];
-let orders = [];
+const START_ORDER_NO = 80230001;
+
+// ========== 1. 初始化 Bmob 【替换为你自己的密钥】 ==========
+const APP_ID = "01650c56bc7714f7195d578d829bb531";
+const REST_KEY = "4e12c9fb173ebe3ae62b70522e478c65";
+Bmob.initialize(APP_ID, REST_KEY);
+// 关闭安全校验，解决跨域
+Bmob.config({ useSecurity: false });
+
+// 数据表名
+const TABLE_USER = "StaffUser";
+const TABLE_ORDER = "OrderData";
 
 window.onload = async function(){
     await loadAllData();
@@ -489,18 +491,15 @@ window.onload = async function(){
         document.getElementById('loginPwd').value = data.pwd || '';
         document.getElementById('rememberPwd').checked = true;
     }
-    // 绑定新增订单点击事件
     document.getElementById('addOrderBtn').onclick = ()=>openEditModal(null);
 };
 
 // 加载全部数据 + 初始化管理员账号
 async function loadAllData() {
     try {
-        // 查询员工账号表
         const userQuery = Bmob.Query(TABLE_USER);
         staffUsers = await userQuery.find();
 
-        // 不存在管理员则自动创建默认账号
         let hasAdmin = staffUsers.some(item => item.role === "admin");
         if(!hasAdmin) {
             const userObj = Bmob.Object(TABLE_USER);
@@ -512,7 +511,6 @@ async function loadAllData() {
             staffUsers.push(userObj);
         }
 
-        // 查询订单表
         const orderQuery = Bmob.Query(TABLE_ORDER);
         orderQuery.order("createdAt");
         orders = await orderQuery.find();
@@ -647,7 +645,6 @@ async function saveUser() {
 
     try {
         if (editUserId) {
-            // 编辑已有账号
             let userItem = staffUsers.find(x => x.account === editUserId);
             const user = Bmob.Object(TABLE_USER);
             user.id = userItem.objectId;
@@ -656,7 +653,6 @@ async function saveUser() {
             user.set("roleName", rn);
             await user.save();
         } else {
-            // 新增账号
             if (staffUsers.find(x => x.account === a)) return alert('账号已存在');
             const user = Bmob.Object(TABLE_USER);
             user.set("account", a);
@@ -803,13 +799,11 @@ async function saveOrder() {
     };
     try {
         if (editId) {
-            // 编辑订单
             const order = Bmob.Object(TABLE_ORDER);
             order.id = editId;
             for(let k in d) order.set(k, d[k]);
             await order.save();
         } else {
-            // 新增订单，自动生成单号
             let maxNo = START_ORDER_NO;
             orders.forEach(o => {
                 let no = parseInt(o.orderNo);
