@@ -4,8 +4,10 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>羽绒服服装管理系统</title>
+    <!-- Excel 导出依赖 -->
     <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/leancloud-storage@4.15.0/dist/av-min.js"></script>
+    <!-- Bmob JS SDK -->
+    <script src="https://cdn.jsdelivr.net/npm/bmob-js-sdk@3.9.4/dist/bmob.min.js"></script>
     <style>
         * {
             margin: 0;
@@ -461,18 +463,16 @@
 </div>
 
 <script>
-// ==================== 修复跨域问题：使用代理兼容配置 ====================
-AV.init({
-    appId: "BqXJ5rLs1De1D1v3eV8n3KnB-MdYXBpaYb1Q4aF",
-    appKey: "6k8wLcV7Ld0nG1gB5eF9aQ2jR7sT5cU1iO8pE2wR4",
-    serverURL: "https://bcx5rls1.lc-cn-e1-shared.com",
-    useCdn: true
-});
+// ========== 1. 初始化 Bmob 【此处替换为你自己的密钥】 ==========
+const APP_ID = "01650c56bc7714f7195d578d829bb531";
+const REST_KEY = "b68a28757a10b7117fdd62ba3ce7b7e8";
+Bmob.initialize(APP_ID, REST_KEY);
 
-const Order = AV.Object.extend('Order');
-const User = AV.Object.extend('User');
+// 数据表名（自动创建，无需手动建表）
+const TABLE_USER = "StaffUser";
+const TABLE_ORDER = "OrderData";
+
 const START_ORDER_NO = 80230001;
-
 let currentUser = null;
 let editId = null;
 let editUserId = null;
@@ -488,45 +488,53 @@ window.onload = async function(){
         document.getElementById('loginPwd').value = data.pwd || '';
         document.getElementById('rememberPwd').checked = true;
     }
+    // 绑定新增订单点击事件
+    document.getElementById('addOrderBtn').onclick = ()=>openEditModal(null);
 };
 
-// 加载云端全部数据
+// 加载全部数据 + 初始化管理员账号
 async function loadAllData() {
     try {
-        let uQuery = new AV.Query(User);
-        staffUsers = await uQuery.find();
-        if(staffUsers.length === 0) {
-            const admin = new User();
-            admin.set('account', 'HQQ8023');
-            admin.set('pwd', '580231');
-            admin.set('role', 'admin');
-            admin.set('roleName', '管理员');
-            await admin.save();
-            staffUsers = [admin];
+        // 查询员工账号表
+        const userQuery = Bmob.Query(TABLE_USER);
+        staffUsers = await userQuery.find();
+
+        // 不存在管理员则自动创建默认账号
+        let hasAdmin = staffUsers.some(item => item.role === "admin");
+        if(!hasAdmin) {
+            const userObj = Bmob.Object(TABLE_USER);
+            userObj.set("account", "HQQ8023");
+            userObj.set("pwd", "580231");
+            userObj.set("role", "admin");
+            userObj.set("roleName", "管理员");
+            await userObj.save();
+            staffUsers.push(userObj);
         }
 
-        let oQuery = new AV.Query(Order);
-        oQuery.ascending('createdAt');
-        orders = await oQuery.find();
+        // 查询订单表
+        const orderQuery = Bmob.Query(TABLE_ORDER);
+        orderQuery.order("createdAt");
+        orders = await orderQuery.find();
         renderTable();
     } catch (e) {
-        alert('加载失败：'+e.message);
+        alert('加载失败：' + e.message);
     }
 }
 
-// ==================== 登录 ====================
+// ========== 标签切换 ==========
 function switchTab(i) {
     document.querySelectorAll('.tab-item').forEach((t,k) => t.className = k===i ? 'tab-item active' : 'tab-item');
     document.getElementById('staffLogin').classList.toggle('hidden', i!==0);
     document.getElementById('customerLogin').classList.toggle('hidden', i!==1);
 }
 
+// ========== 员工登录 ==========
 async function staffLogin() {
     let a = document.getElementById('loginAccount').value.trim();
     let p = document.getElementById('loginPwd').value.trim();
     let rem = document.getElementById('rememberPwd').checked;
 
-    let user = staffUsers.find(u => u.get('account') === a && u.get('pwd') === p);
+    let user = staffUsers.find(u => u.account === a && u.pwd === p);
     if (!user) return alert('账号或密码错误');
 
     if(rem) localStorage.setItem('rememberLogin', JSON.stringify({account:a,pwd:p}));
@@ -536,6 +544,7 @@ async function staffLogin() {
     loginOk();
 }
 
+// ========== 客户查询登录 ==========
 function customerLogin() {
     let p = document.getElementById('custPhone').value.trim();
     if (!p) return alert('请输入手机号');
@@ -543,22 +552,23 @@ function customerLogin() {
     loginOk();
 }
 
+// 登录成功页面切换
 function loginOk() {
     document.getElementById('loginWrap').classList.add('hidden');
     document.getElementById('mainWrap').classList.remove('hidden');
-    document.getElementById('userRole').innerText = currentUser.isCustomer ? '客户' : currentUser.get('roleName');
-    document.getElementById('userName').innerText = currentUser.isCustomer ? '客户' : currentUser.get('account');
+    document.getElementById('userRole').innerText = currentUser.isCustomer ? '客户' : currentUser.roleName;
+    document.getElementById('userName').innerText = currentUser.isCustomer ? '客户' : currentUser.account;
 
-    let isAdmin = !currentUser.isCustomer && currentUser.get('role') === 'admin';
+    let isAdmin = !currentUser.isCustomer && currentUser.role === 'admin';
     let isCust = currentUser.isCustomer;
 
     document.getElementById('userManageBtn').classList.toggle('hidden', !isAdmin);
     document.getElementById('addOrderBtn').classList.toggle('hidden', isCust);
     document.getElementById('exportBtn').classList.toggle('hidden', isCust);
-    document.getElementById('addOrderBtn').onclick = ()=>openEditModal(null);
     renderTable();
 }
 
+// 退出登录
 function logout() {
     currentUser = null;
     document.getElementById('mainWrap').classList.add('hidden');
@@ -567,7 +577,7 @@ function logout() {
     document.getElementById('userManagePage').classList.add('hidden');
 }
 
-// ==================== 人员管理 ====================
+// ========== 人员管理模块 ==========
 function openUserManage() {
     document.getElementById('orderPage').classList.add('hidden');
     document.getElementById('userManagePage').classList.remove('hidden');
@@ -583,18 +593,17 @@ function renderUserTable() {
     let t = document.getElementById('userTable');
     let kw = document.getElementById('userSearch').value.toLowerCase();
     let list = staffUsers.filter(u => {
-        let role = u.get('role');
-        if (role === 'admin') return false;
-        let a = (u.get('account') || '').toLowerCase();
-        let r = (u.get('roleName') || '').toLowerCase();
+        if (u.role === 'admin') return false;
+        let a = (u.account || '').toLowerCase();
+        let r = (u.roleName || '').toLowerCase();
         return a.includes(kw) || r.includes(kw);
     });
     t.innerHTML = '';
     list.forEach(u => {
         let tr = document.createElement('tr');
-        let account = u.get('account');
-        let roleName = u.get('roleName');
-        let role = u.get('role');
+        let account = u.account;
+        let roleName = u.roleName;
+        let role = u.role;
         tr.innerHTML = `
         <td>${account}</td>
         <td><span class="tag ${role==='jigong'?'tag-blue':'tag-success'}">${roleName}</span></td>
@@ -617,13 +626,13 @@ function openUserEditModal() {
 }
 
 function editUser(account) {
-    let u = staffUsers.find(x => x.get('account') === account);
+    let u = staffUsers.find(x => x.account === account);
     if (!u) return;
     editUserId = account;
     document.getElementById('userEditTitle').innerText = '编辑员工';
-    document.getElementById('editAccount').value = u.get('account');
-    document.getElementById('editPwd').value = u.get('pwd');
-    document.getElementById('editRole').value = u.get('role');
+    document.getElementById('editAccount').value = u.account;
+    document.getElementById('editPwd').value = u.pwd;
+    document.getElementById('editRole').value = u.role;
     document.getElementById('editAccount').disabled = true;
     document.getElementById('userEditModal').style.display = 'flex';
 }
@@ -637,20 +646,22 @@ async function saveUser() {
 
     try {
         if (editUserId) {
-            let u = staffUsers.find(x => x.get('account') === editUserId);
-            if (u) {
-                u.set('pwd', p);
-                u.set('role', r);
-                u.set('roleName', rn);
-                await u.save();
-            }
+            // 编辑已有账号
+            let userItem = staffUsers.find(x => x.account === editUserId);
+            const user = Bmob.Object(TABLE_USER);
+            user.id = userItem.objectId;
+            user.set("pwd", p);
+            user.set("role", r);
+            user.set("roleName", rn);
+            await user.save();
         } else {
-            if (staffUsers.find(x => x.get('account') === a)) return alert('账号已存在');
-            const user = new User();
-            user.set('account', a);
-            user.set('pwd', p);
-            user.set('role', r);
-            user.set('roleName', rn);
+            // 新增账号
+            if (staffUsers.find(x => x.account === a)) return alert('账号已存在');
+            const user = Bmob.Object(TABLE_USER);
+            user.set("account", a);
+            user.set("pwd", p);
+            user.set("role", r);
+            user.set("roleName", rn);
             await user.save();
         }
         await loadAllData();
@@ -662,8 +673,10 @@ async function saveUser() {
 async function delUser(account) {
     if (!confirm('确定删除该员工？')) return;
     try {
-        let u = staffUsers.find(x => x.get('account') === account);
-        if (u) await u.destroy();
+        let userItem = staffUsers.find(x => x.account === account);
+        const user = Bmob.Object(TABLE_USER);
+        user.id = userItem.objectId;
+        await user.destroy();
         await loadAllData();
     } catch (e) { alert('失败：'+e.message); }
 }
@@ -672,14 +685,14 @@ function closeUserEditModal() {
     document.getElementById('userEditModal').style.display = 'none';
 }
 
-// ==================== 订单 ====================
+// ========== 订单模块 ==========
 function loadJigongList() {
     let sel = document.getElementById('jigongSelect');
     sel.innerHTML = '<option value="">请选择机工</option>';
-    staffUsers.filter(u => u.get('role') === 'jigong').forEach(u => {
+    staffUsers.filter(u => u.role === 'jigong').forEach(u => {
         let o = document.createElement('option');
-        o.value = u.get('account');
-        o.innerText = u.get('account');
+        o.value = u.account;
+        o.innerText = u.account;
         sel.appendChild(o);
     });
 }
@@ -688,15 +701,16 @@ function renderTable() {
     let tb = document.getElementById('orderTable');
     let kw = document.getElementById('searchInput').value.toLowerCase();
     let list = orders;
+
     if (currentUser && currentUser.isCustomer) {
-        list = orders.filter(o => (o.get('dianhua') || '') === currentUser.phone);
+        list = orders.filter(o => (o.dianhua || '') === currentUser.phone);
     } else {
         list = orders.filter(o => {
-            let n = (o.get('xingming') || '').toLowerCase();
-            let p = (o.get('dianhua') || '').toLowerCase();
-            let no = (o.get('orderNo') || '').toLowerCase();
-            let d = (o.get('riqi') || '').toLowerCase();
-            let g = (o.get('huohao') || '').toLowerCase();
+            let n = (o.xingming || '').toLowerCase();
+            let p = (o.dianhua || '').toLowerCase();
+            let no = (o.orderNo || '').toLowerCase();
+            let d = (o.riqi || '').toLowerCase();
+            let g = (o.huohao || '').toLowerCase();
             return n.includes(kw) || p.includes(kw) || no.includes(kw) || d.includes(kw) || g.includes(kw);
         });
     }
@@ -704,23 +718,23 @@ function renderTable() {
     list.forEach(o => {
         let op = '';
         if (currentUser && !currentUser.isCustomer) {
-            if (currentUser.get('role') === 'admin') {
-                op = `<span class="opt-btn edit-btn" onclick="editOrder('${o.id}')">编辑</span><span class="opt-btn del-btn" onclick="delOrder('${o.id}')">删除</span>`;
-            } else if (['chong','jigong'].includes(currentUser.get('role'))) {
-                op = `<span class="opt-btn edit-btn" onclick="editOrder('${o.id}')">编辑</span>`;
+            if (currentUser.role === 'admin') {
+                op = `<span class="opt-btn edit-btn" onclick="editOrder('${o.objectId}')">编辑</span><span class="opt-btn del-btn" onclick="delOrder('${o.objectId}')">删除</span>`;
+            } else if (['chong','jigong'].includes(currentUser.role)) {
+                op = `<span class="opt-btn edit-btn" onclick="editOrder('${o.objectId}')">编辑</span>`;
             }
         }
         
         let tr = document.createElement('tr');
         tr.innerHTML = `
-        <td><span class="order-no" onclick="showDetail('${o.id}')">${o.get('orderNo')}</span></td>
-        <td>${o.get('chongrong') || '未充绒'}</td>
-        <td>${o.get('jigong') || ''}</td>
-        <td>${o.get('xingming') || ''}</td>
-        <td>${o.get('dianhua') || ''}</td>
-        <td><span class="tag ${o.get('shifou2')==='是'?'tag-success':'tag-danger'}">${o.get('shifou2')||'否'}</span></td>
-        <td><span class="tag ${o.get('shifou1')==='是'?'tag-success':'tag-danger'}">${o.get('shifou1')||'否'}</span></td>
-        <td>${o.get('riqi') || ''}</td>
+        <td><span class="order-no" onclick="showDetail('${o.objectId}')">${o.orderNo}</span></td>
+        <td>${o.chongrong || '未充绒'}</td>
+        <td>${o.jigong || ''}</td>
+        <td>${o.xingming || ''}</td>
+        <td>${o.dianhua || ''}</td>
+        <td><span class="tag ${o.shifou2==='是'?'tag-success':'tag-danger'}">${o.shifou2||'否'}</span></td>
+        <td><span class="tag ${o.shifou1==='是'?'tag-success':'tag-danger'}">${o.shifou1||'否'}</span></td>
+        <td>${o.riqi || ''}</td>
         <td>${op}</td>`;
         tb.appendChild(tr);
     });
@@ -731,34 +745,35 @@ function openEditModal(id) {
     loadJigongList();
     let m = document.getElementById('editModal');
     document.getElementById('editModalTitle').innerText = id ? '编辑订单' : '新增订单';
+
     if (id) {
-        let o = orders.find(x => x.id === id);
-        document.getElementById('chongrong').value = o.get('chongrong') || '未充绒';
-        document.getElementById('jigongSelect').value = o.get('jigong') || '';
-        document.getElementById('shifou1').value = o.get('shifou1') || '否';
-        document.getElementById('xingming').value = o.get('xingming') || '';
-        document.getElementById('dianhua').value = o.get('dianhua') || '';
-        document.getElementById('changjia').value = o.get('changjia') || '';
-        document.getElementById('huohao').value = o.get('huohao') || '';
-        document.getElementById('yanse').value = o.get('yanse') || '';
-        document.getElementById('daxiao').value = o.get('daxiao') || '';
-        document.getElementById('jiage').value = o.get('jiage') || '';
-        document.getElementById('yajin').value = o.get('yajin') || '';
-        document.getElementById('shifou2').value = o.get('shifou2') || '否';
-        document.getElementById('riqi').value = o.get('riqi') || '';
-        document.getElementById('beizhu').value = o.get('beizhu') || '';
-        document.getElementById('qianshou').value = o.get('qianshou') || '否';
+        let o = orders.find(x => x.objectId === id);
+        document.getElementById('chongrong').value = o.chongrong || '未充绒';
+        document.getElementById('jigongSelect').value = o.jigong || '';
+        document.getElementById('shifou1').value = o.shifou1 || '否';
+        document.getElementById('xingming').value = o.xingming || '';
+        document.getElementById('dianhua').value = o.dianhua || '';
+        document.getElementById('changjia').value = o.changjia || '';
+        document.getElementById('huohao').value = o.huohao || '';
+        document.getElementById('yanse').value = o.yanse || '';
+        document.getElementById('daxiao').value = o.daxiao || '';
+        document.getElementById('jiage').value = o.jiage || '';
+        document.getElementById('yajin').value = o.yajin || '';
+        document.getElementById('shifou2').value = o.shifou2 || '否';
+        document.getElementById('riqi').value = o.riqi || '';
+        document.getElementById('beizhu').value = o.beizhu || '';
+        document.getElementById('qianshou').value = o.qianshou || '否';
 
         let all = m.querySelectorAll('input,select');
         all.forEach(e => e.disabled = true);
-        if (currentUser.get('role') === 'chong') document.getElementById('chongrong').disabled = false;
-        else if (currentUser.get('role') === 'jigong') {
+        if (currentUser.role === 'chong') document.getElementById('chongrong').disabled = false;
+        else if (currentUser.role === 'jigong') {
             document.getElementById('jigongSelect').disabled = false;
             document.getElementById('shifou1').disabled = false;
             for (let opt of document.getElementById('jigongSelect').options) {
-                opt.disabled = opt.value !== currentUser.get('account');
+                opt.disabled = opt.value !== currentUser.account;
             }
-        } else if (currentUser.get('role') === 'admin') all.forEach(e => e.disabled = false);
+        } else if (currentUser.role === 'admin') all.forEach(e => e.disabled = false);
     } else {
         m.querySelectorAll('input,select').forEach(e => e.value = '');
         document.getElementById('chongrong').value = '未充绒';
@@ -787,16 +802,19 @@ async function saveOrder() {
     };
     try {
         if (editId) {
-            let o = orders.find(x => x.id === editId);
-            for(let k in d) o.set(k, d[k]);
-            await o.save();
+            // 编辑订单
+            const order = Bmob.Object(TABLE_ORDER);
+            order.id = editId;
+            for(let k in d) order.set(k, d[k]);
+            await order.save();
         } else {
+            // 新增订单，自动生成单号
             let maxNo = START_ORDER_NO;
             orders.forEach(o => {
-                let no = parseInt(o.get('orderNo'));
+                let no = parseInt(o.orderNo);
                 if(no>maxNo) maxNo = no;
             });
-            const order = new Order();
+            const order = Bmob.Object(TABLE_ORDER);
             for(let k in d) order.set(k, d[k]);
             order.set('orderNo', String(maxNo+1));
             await order.save();
@@ -807,49 +825,53 @@ async function saveOrder() {
 }
 
 function editOrder(id) { openEditModal(id); }
+
 async function delOrder(id) {
     if (!confirm('确定删除该订单？')) return;
     try {
-        let o = orders.find(x => x.id === id);
-        await o.destroy();
+        const order = Bmob.Object(TABLE_ORDER);
+        order.id = id;
+        await order.destroy();
         await loadAllData();
     } catch (e) { alert('失败：'+e.message); }
 }
+
 function closeEditModal() { document.getElementById('editModal').style.display = 'none'; }
 
 function showDetail(id) {
-    let o = orders.find(x => x.id === id);
+    let o = orders.find(x => x.objectId === id);
     let box = document.getElementById('detailBox');
     box.innerHTML = `
-    <div style="padding:10px 0;border-bottom:1px solid #f0f0f0;">订单编号：${o.get('orderNo')}</div>
-    <div style="padding:10px 0;border-bottom:1px solid #f0f0f0;">充绒状态：${o.get('chongrong')||'未充绒'}</div>
-    <div style="padding:10px 0;border-bottom:1px solid #f0f0f0;">机工：${o.get('jigong')||''}</div>
-    <div style="padding:10px 0;border-bottom:1px solid #f0f0f0;">是否完工：${o.get('shifou1')||'否'}</div>
-    <div style="padding:10px 0;border-bottom:1px solid #f0f0f0;">客户姓名：${o.get('xingming')||''}</div>
-    <div style="padding:10px 0;border-bottom:1px solid #f0f0f0;">联系电话：${o.get('dianhua')||''}</div>
-    <div style="padding:10px 0;border-bottom:1px solid #f0f0f0;">厂家：${o.get('changjia')||''}</div>
-    <div style="padding:10px 0;border-bottom:1px solid #f0f0f0;">货号：${o.get('huohao')||''}</div>
-    <div style="padding:10px 0;border-bottom:1px solid #f0f0f0;">颜色：${o.get('yanse')||''}</div>
-    <div style="padding:10px 0;border-bottom:1px solid #f0f0f0;">尺码：${o.get('daxiao')||''}</div>
-    <div style="padding:10px 0;border-bottom:1px solid #f0f0f0;">单价：${o.get('jiage')||''}</div>
-    <div style="padding:10px 0;border-bottom:1px solid #f0f0f0;">押金：${o.get('yajin')||''}</div>
-    <div style="padding:10px 0;border-bottom:1px solid #f0f0f0;">是否到货：${o.get('shifou2')||'否'}</div>
-    <div style="padding:10px 0;border-bottom:1px solid #f0f0f0;">订单日期：${o.get('riqi')||''}</div>
-    <div style="padding:10px 0;border-bottom:1px solid #f0f0f0;">备注：${o.get('beizhu')||''}</div>
-    <div style="padding:10px 0;">签收：${o.get('qianshou')||'否'}</div>`;
+    <div style="padding:10px 0;border-bottom:1px solid #f0f0f0;">订单编号：${o.orderNo}</div>
+    <div style="padding:10px 0;border-bottom:1px solid #f0f0f0;">充绒状态：${o.chongrong||'未充绒'}</div>
+    <div style="padding:10px 0;border-bottom:1px solid #f0f0f0;">机工：${o.jigong||''}</div>
+    <div style="padding:10px 0;border-bottom:1px solid #f0f0f0;">是否完工：${o.shifou1||'否'}</div>
+    <div style="padding:10px 0;border-bottom:1px solid #f0f0f0;">客户姓名：${o.xingming||''}</div>
+    <div style="padding:10px 0;border-bottom:1px solid #f0f0f0;">联系电话：${o.dianhua||''}</div>
+    <div style="padding:10px 0;border-bottom:1px solid #f0f0f0;">厂家：${o.changjia||''}</div>
+    <div style="padding:10px 0;border-bottom:1px solid #f0f0f0;">货号：${o.huohao||''}</div>
+    <div style="padding:10px 0;border-bottom:1px solid #f0f0f0;">颜色：${o.yanse||''}</div>
+    <div style="padding:10px 0;border-bottom:1px solid #f0f0f0;">尺码：${o.daxiao||''}</div>
+    <div style="padding:10px 0;border-bottom:1px solid #f0f0f0;">单价：${o.jiage||''}</div>
+    <div style="padding:10px 0;border-bottom:1px solid #f0f0f0;">押金：${o.yajin||''}</div>
+    <div style="padding:10px 0;border-bottom:1px solid #f0f0f0;">是否到货：${o.shifou2||'否'}</div>
+    <div style="padding:10px 0;border-bottom:1px solid #f0f0f0;">订单日期：${o.riqi||''}</div>
+    <div style="padding:10px 0;border-bottom:1px solid #f0f0f0;">备注：${o.beizhu||''}</div>
+    <div style="padding:10px 0;">签收：${o.qianshou||'否'}</div>`;
     document.getElementById('detailModal').style.display = 'flex';
 }
 
 function closeDetailModal() { document.getElementById('detailModal').style.display = 'none'; }
 
+// 导出 Excel
 function exportExcel() {
     let data = [["订单编号","充绒状态","机工","是否完工","客户姓名","电话","厂家","货号","颜色","尺码","单价","押金","是否到货","订单日期","备注","签收"]];
     orders.forEach(o => {
         data.push([
-            o.get('orderNo'), o.get('chongrong')||'未充绒', o.get('jigong')||'', o.get('shifou1')||'',
-            o.get('xingming')||'', o.get('dianhua')||'', o.get('changjia')||'', o.get('huohao')||'',
-            o.get('yanse')||'', o.get('daxiao')||'', o.get('jiage')||'', o.get('yajin')||'',
-            o.get('shifou2')||'', o.get('riqi')||'', o.get('beizhu')||'', o.get('qianshou')||''
+            o.orderNo, o.chongrong||'未充绒', o.jigong||'', o.shifou1||'',
+            o.xingming||'', o.dianhua||'', o.changjia||'', o.huohao||'',
+            o.yanse||'', o.daxiao||'', o.jiage||'', o.yajin||'',
+            o.shifou2||'', o.riqi||'', o.beizhu||'', o.qianshou||''
         ]);
     });
     let ws = XLSX.utils.aoa_to_sheet(data);
