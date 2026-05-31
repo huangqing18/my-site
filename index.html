@@ -467,6 +467,7 @@
 const APP_ID = "01650c56bc7714f7195d578d829bb531";
 const REST_KEY = "b68a28757a10b7117fdd62ba3ce7b7e8";
 Bmob.initialize(APP_ID, REST_KEY);
+Bmob.config({ useSecurity: false });    
 
 // 数据表名（自动创建，无需手动建表）
 const TABLE_USER = "StaffUser";
